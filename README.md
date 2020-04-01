@@ -1,13 +1,13 @@
 logs-go
 -------
 
-[![CircleCI](https://circleci.com/gh/microparts/logs-go.svg?style=shield)](https://circleci.com/gh/microparts/logs-go) [![codecov](https://codecov.io/gh/microparts/logs-go/graph/badge.svg)](https://codecov.io/gh/microparts/logs-go)
+[![CircleCI](https://circleci.com/gh/spacetab-io/logs-go.svg?style=shield)](https://circleci.com/gh/spacetab-io/logs-go) [![codecov](https://codecov.io/gh/spacetab-io/logs-go/graph/badge.svg)](https://codecov.io/gh/spacetab-io/logs-go)
 
 [Logrus](github.com/sirupsen/logrus) wrapper for easy use with sentry hook, database (gorm) and mux (gin) loggers.
 
 ## Usage
 
-Initiate new logger with prefilled `logs.Config` and use it as common logrus logger instance
+Initiate new logger with filled `logs.Config` and use it as common logrus logger instance
 
 ```go
 package main
@@ -15,21 +15,16 @@ package main
 import (
 	"time"
 	
-	"github.com/microparts/logs-go"
+	"github.com/spacetab-io/logs-go"
 )
 
 func main() {
 	conf := &logs.Config{
-		Level:"warn",
-		Format: "text",
+		LogLevel: "warn",
+		Debug: true,
 		Sentry: &logs.SentryConfig{
 			Enable: true,
-			Stage:"test",
 			DSN: "http://dsn.sentry.com",
-			ResponseTimeout: 0,
-			StackTrace: logs.StackTraceConfig{
-				Enable: true,
-			},
 		},
 	}
 	
