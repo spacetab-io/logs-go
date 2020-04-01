@@ -1,42 +1,28 @@
 package logs
 
-import (
-	"time"
+import "os"
 
-	"github.com/sirupsen/logrus"
-)
-
-const (
-	defaultSTAGE = "defaults"
-)
-
-type StackTraceConfig struct {
-	Enable  bool `yaml:"enable"`
-	Context int  `yaml:"context"`
+type Config struct {
+	Stage    string
+	LogLevel string        `yaml:"level"`
+	Debug    bool          `yaml:"debug"`
+	Sentry   *SentryConfig `yaml:"sentry"`
 }
 
 type SentryConfig struct {
-	Enable          bool             `yaml:"enable"`
-	Stage           string           `yaml:"stage"`
-	MinlLogLevel    string           `yaml:"min_log_level"`
-	DSN             string           `yaml:"dsn"`
-	ResponseTimeout time.Duration    `yaml:"response_timeout"`
-	StackTrace      StackTraceConfig `yaml:"stacktrace"`
+	Enable bool   `yaml:"enable"`
+	DSN    string `yaml:"dsn"`
 }
 
-type Config struct {
-	Level  string        `yaml:"level"`
-	Format string        `yaml:"format"`
-	Sentry *SentryConfig `yaml:"sentry,omitempty"`
+func (c *Config) SetStage() {
+	c.Stage = GetEnv("STAGE", "development")
+	return
 }
 
-var (
-	sentryLevels = []logrus.Level{
-		logrus.DebugLevel,
-		logrus.InfoLevel,
-		logrus.WarnLevel,
-		logrus.ErrorLevel,
-		logrus.FatalLevel,
-		logrus.PanicLevel,
+func GetEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
 	}
-)
+
+	return fallback
+}

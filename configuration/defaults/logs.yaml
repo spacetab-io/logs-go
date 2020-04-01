@@ -1,11 +1,7 @@
 defaults:
   logs:
-    level: info
-    format: text
+    level: debug
+    debug: true
     sentry:
       enable: true
-      min_log_level: warn
       dsn: ""
-      response_timeout: 0
-      stacktrace:
-        enable: true

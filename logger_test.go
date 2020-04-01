@@ -1,6 +1,7 @@
 package logs
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -8,84 +9,149 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func logConfig(withSenrty bool) *Config {
-	s := &SentryConfig{
-		Enable:          true,
-		Stage:           "test",
-		DSN:             "https://xxx@sentry.io/yyy",
-		ResponseTimeout: 0,
-		MinlLogLevel:    "error",
-		StackTrace: StackTraceConfig{
-			Enable: true,
-		},
+var (
+	testFormatter = &logrus.TextFormatter{
+		TimestampFormat:        time.RFC3339,
+		FullTimestamp:          true,
+		DisableLevelTruncation: true,
+		QuoteEmptyFields:       true,
 	}
-	cfg := &Config{
-		Level:  "info",
-		Format: "text",
-	}
-	if withSenrty {
-		cfg.Sentry = s
-	}
-	return cfg
-}
+)
 
 // I just want to test it before pushing. Don't know how to test it in right way, sorry )
 func TestNewLogger(t *testing.T) {
-	t.Run("Construct new logger", func(t *testing.T) {
-		cfg := logConfig(false)
-		l, err := NewLogger(cfg)
-		assert.NoError(t, err)
-		assert.Equal(t, logrus.InfoLevel, l.GetLevel())
-	})
+	type testCase struct {
+		name        string
+		config      *Config
+		expFormatte *logrus.TextFormatter
+		hasErr      bool
+	}
+	type testCases []testCase
 
-	t.Run("Logger format", func(t *testing.T) {
-		cfg := logConfig(false)
-		cfg.Format = "du'soley"
-		l, err := NewLogger(cfg)
-		assert.NoError(t, err)
-		assert.Equal(t, &logrus.JSONFormatter{TimestampFormat: time.RFC3339}, l.Formatter)
-	})
+	cfg := &Config{
+		Stage:    "test",
+		LogLevel: logrus.InfoLevel.String(),
+		Sentry: &SentryConfig{
+			Enable: false,
+		},
+	}
+	cfg2 := &Config{
+		Stage:    "test",
+		LogLevel: logrus.InfoLevel.String(),
+		Sentry: &SentryConfig{
+			Enable: true,
+			DSN:    "https://xxx@sentry.io/yyy",
+		},
+	}
 
-	t.Run("good sentry config", func(t *testing.T) {
-		cfg := logConfig(true)
-		l, err := NewLogger(cfg)
-		assert.NoError(t, err)
-		assert.Equal(t, len(l.Hooks), len(sentryLevels[:getLoggerLevel(cfg)]))
-	})
+	cfg3 := &Config{
+		Stage:    "",
+		LogLevel: logrus.InfoLevel.String(),
+		Sentry: &SentryConfig{
+			Enable: true,
+			DSN:    "go away",
+		},
+	}
+	cfg4 := &Config{
+		Stage:    "test",
+		LogLevel: logrus.InfoLevel.String(),
+		Sentry: &SentryConfig{
+			Enable: true,
+			DSN:    "go away",
+		},
+	}
+	cfg5 := &Config{
+		Stage:    "test",
+		LogLevel: "paranoya",
+		Sentry: &SentryConfig{
+			Enable: true,
+			DSN:    "go away",
+		},
+	}
 
-	t.Run("bad sentry config", func(t *testing.T) {
-		cfg := logConfig(true)
-		cfg.Sentry.DSN = "bad dsn"
-		_, err := NewLogger(cfg)
-		assert.Error(t, err)
-	})
+	tcs := testCases{
+		{name: "new logger", config: cfg, expFormatte: testFormatter},
+		{name: "good sentry", config: cfg2, expFormatte: testFormatter},
+		{name: "no stage", config: cfg3, hasErr: true},
+		{name: "bad sentry dsn", config: cfg4, hasErr: true},
+		{name: "bad sentry log lvl", config: cfg5, hasErr: true},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			l, err := NewLogger(tc.config)
 
+			if tc.hasErr {
+				if !assert.Error(t, err, "has error fail") {
+					t.FailNow()
+				}
+				return
+			} else {
+				if !assert.NoError(t, err, "no error fail") {
+					t.FailNow()
+				}
+			}
+
+			if !assert.Equal(t, tc.config.LogLevel, l.GetLevel().String(), "wrong log level") {
+				t.FailNow()
+			}
+
+			if !assert.Equal(t, tc.expFormatte, l.Formatter, "differ formatter") {
+				t.FailNow()
+			}
+
+			if tc.config.Sentry.Enable {
+				if !assert.Equal(t, 4, len(l.Hooks), "wrong number of hooks") {
+					t.FailNow()
+				}
+			}
+		})
+	}
 }
 
-func TestGetLoggerLeve(t *testing.T) {
-	t.Run("existing Logger level", func(t *testing.T) {
-		cfg := logConfig(false)
-		ll := getLoggerLevel(cfg)
-		assert.Equal(t, logrus.InfoLevel, ll)
-
+func TestGetEnv(t *testing.T) {
+	t.Run("get ent key value", func(t *testing.T) {
+		c := &Config{}
+		key := "STAGE"
+		val := "testing"
+		err := os.Setenv(key, val)
+		assert.NoError(t, err)
+		c.SetStage()
+		assert.Equal(t, val, c.Stage)
+		_ = os.Unsetenv(key)
 	})
-	t.Run("not existing Logger level", func(t *testing.T) {
-		cfg := logConfig(false)
-		cfg.Level = "paranoia"
-		ll := getLoggerLevel(cfg)
-		assert.Equal(t, logrus.WarnLevel, ll)
+	t.Run("get fallback stage", func(t *testing.T) {
+		c := &Config{}
+		key := "notSTAGE"
+		val := "testing"
+		err := os.Setenv(key, val)
+		assert.NoError(t, err)
+		c.SetStage()
+		assert.Equal(t, "development", c.Stage)
 	})
 }
 
-func TestSentryStage(t *testing.T) {
-	t.Run("stage is set", func(t *testing.T) {
-		cfg := logConfig(true)
-		assert.Equal(t, "test", getSTAGE(cfg))
-	})
+func TestConfig_SetStage(t *testing.T) {
+	type testCase struct {
+		name   string
+		key    string
+		flb    string
+		val    string
+		hasErr bool
+	}
+	type testCases []testCase
 
-	t.Run("stage is not set", func(t *testing.T) {
-		cfg := logConfig(true)
-		cfg.Sentry.Stage = ""
-		assert.Equal(t, defaultSTAGE, getSTAGE(cfg))
-	})
+	tcs := testCases{
+		{name: "get env value", key: "key", flb: "", val: "value", hasErr: false},
+		{name: "get fallback value", key: "", flb: "fallback", val: "fallback", hasErr: false},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			os.Setenv(tc.key, tc.val)
+			val := GetEnv(tc.key, tc.flb)
+			if !assert.Equal(t, tc.val, val) {
+				t.FailNow()
+			}
+		})
+	}
 }
