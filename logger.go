@@ -153,6 +153,13 @@ func Level(level zerolog.Level) zerolog.Logger {
 	return logger.Level(level)
 }
 
+// LevelString creates a child logger with the minimum accepted level set to level passed as string.
+func LevelString(lvl string) zerolog.Logger {
+	level, _ := getLevel(lvl)
+
+	return logger.Level(level)
+}
+
 // Sample returns a logger with the s sampler.
 func Sample(s zerolog.Sampler) zerolog.Logger {
 	return logger.Sample(s)
