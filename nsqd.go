@@ -4,19 +4,19 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type nsqLogger struct {
+type NSQLogger struct {
 	logger zerolog.Logger
 	level  zerolog.Level
 }
 
-func NSQLogger(logLevel string) nsqLogger {
+func NewNSQLogger(logLevel string) NSQLogger {
 	l := Logger()
 	lvl, _ := zerolog.ParseLevel(logLevel)
 
-	return nsqLogger{logger: l, level: lvl}
+	return NSQLogger{logger: l, level: lvl}
 }
 
-func (nl nsqLogger) Output(calldepth int, s string) error {
+func (nl NSQLogger) Output(calldepth int, s string) error {
 	WithLevel(nl.level).Msg(s)
 
 	return nil
