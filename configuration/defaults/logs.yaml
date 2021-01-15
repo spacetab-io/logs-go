@@ -1,7 +1,9 @@
 defaults:
   logs:
     level: debug
-    debug: true
+    format: text
+    no_color: false
+    show_caller: true
     sentry:
-      enable: true
+      enable: false
       dsn: ""

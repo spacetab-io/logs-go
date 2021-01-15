@@ -1,28 +1,21 @@
-package logs
+package log
 
-import "os"
+type Format string
+
+const (
+	FormatText = "text"
+	FormatJSON = "json"
+)
 
 type Config struct {
-	Stage    string
-	LogLevel string        `yaml:"level"`
-	Debug    bool          `yaml:"debug"`
-	Sentry   *SentryConfig `yaml:"sentry"`
+	Level      string        `yaml:"level"`
+	Format     Format        `yaml:"format"`
+	NoColor    bool          `yaml:"no_color"`
+	ShowCaller bool          `yaml:"show_caller"`
+	Sentry     *SentryConfig `yaml:"sentry,omitempty"`
 }
 
 type SentryConfig struct {
-	Enable bool   `yaml:"enable"`
 	DSN    string `yaml:"dsn"`
-}
-
-func (c *Config) SetStage() {
-	c.Stage = GetEnv("STAGE", "development")
-	return
-}
-
-func GetEnv(key, fallback string) string {
-	if value, ok := os.LookupEnv(key); ok {
-		return value
-	}
-
-	return fallback
+	Enable bool   `yaml:"enable"`
 }

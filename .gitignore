@@ -2,3 +2,5 @@
 vendor
 c.out
 coverage.html
+.golangci.yml
+golangci-lint
