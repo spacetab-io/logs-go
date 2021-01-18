@@ -18,10 +18,25 @@ import (
 const (
 	defaultLevel    = "debug"
 	ctxRequestIDKey = "request_id"
+
+	defaultCallerSkipFrames    = 2
+	standAloneCallerSkipFrames = 6
 )
 
+type zLogger struct {
+	zerolog.Logger
+	cfg Config
+}
+
 // logger is the global logger.
-var logger, _ = newZerolog(Config{Level: "debug", Format: FormatText, Caller: &CallerConfig{CallerSkipFrames: 6}}, os.Stdout)
+var logger, _ = newZerolog(
+	Config{
+		Level:  defaultLevel,
+		Format: FormatText,
+		Caller: &CallerConfig{CallerSkipFrames: standAloneCallerSkipFrames},
+	},
+	nil,
+)
 
 // set global Zerolog logger
 func Init(stage string, cfg Config, serviceAlias string, serviceVersion string, w io.Writer) (err error) {
@@ -35,7 +50,7 @@ func Init(stage string, cfg Config, serviceAlias string, serviceVersion string, 
 
 	if cfg.Caller == nil {
 		cfg.Caller = &CallerConfig{
-			CallerSkipFrames: 2,
+			CallerSkipFrames: defaultCallerSkipFrames,
 		}
 	}
 
@@ -59,7 +74,7 @@ func Init(stage string, cfg Config, serviceAlias string, serviceVersion string, 
 	return err
 }
 
-func newZerolog(cfg Config, w io.Writer) (logger zerolog.Logger, err error) {
+func newZerolog(cfg Config, w io.Writer) (logger zLogger, err error) {
 	// setup a global function that transforms any error passed to
 	// zerolog to an error with stack strace.
 	zerolog.ErrorMarshalFunc = func(err error) interface{} {
@@ -128,7 +143,8 @@ func newZerolog(cfg Config, w io.Writer) (logger zerolog.Logger, err error) {
 		lctx = lctx.Caller()
 	}
 
-	logger = lctx.Logger().Level(level)
+	logger.Logger = lctx.Logger().Level(level)
+	logger.cfg = cfg
 
 	stdlog.SetFlags(0)
 	stdlog.SetOutput(logger)
@@ -150,12 +166,13 @@ func getLevel(lvl string) (zerolog.Level, error) {
 }
 
 func Logger() zerolog.Logger {
-	return logger
+	return logger.Logger
 }
 
 // Output duplicates the global logger and sets w as its output.
 func Output(w io.Writer) zerolog.Logger {
-	return logger.Output(w)
+	l, _ := newZerolog(logger.cfg, w)
+	return l.Logger
 }
 
 // With creates a child logger with the field added to its context.

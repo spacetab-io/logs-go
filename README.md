@@ -3,7 +3,8 @@ logs-go
 
 [![CircleCI](https://circleci.com/gh/spacetab-io/logs-go.svg?style=shield)](https://circleci.com/gh/spacetab-io/logs-go) [![codecov](https://codecov.io/gh/spacetab-io/logs-go/graph/badge.svg)](https://codecov.io/gh/spacetab-io/logs-go)
 
-Wrapper for [zerolog](https://github.com/rs/zerolog) tuned to work with [configuration](https://github.com/spacetab-io/configuration-go) and sentry hook.
+Wrapper for [zerolog](https://github.com/rs/zerolog) tuned to work with [configuration](https://github.com/spacetab-io/configuration-go) and
+sentry hook.
 
 ## Usage
 
@@ -13,14 +14,17 @@ Initiate new logger with filled `log.Config` and use it as common zerolog
 package main
 
 import (
-	"github.com/spacetab-io/logs-go/v2"
+	log "github.com/spacetab-io/logs-go/v2"
 )
 
 func main() {
 	conf := log.Config{
-		Level:      "warn",
-		Format:     "text",
-		ShowCaller: true,
+		Level:  "warn",
+		Format: "text",
+		Caller: &log.CallerConfig{
+			Disabled:         false,
+			CallerSkipFrames: 2,
+		},
 		Sentry: &log.SentryConfig{
 			Enable: true,
 			DSN:    "http://dsn.sentry.com",
