@@ -21,7 +21,7 @@ const (
 )
 
 // logger is the global logger.
-var logger, _ = newZerolog(Config{Level: "debug", Format: FormatText}, os.Stdout)
+var logger, _ = newZerolog(Config{Level: "debug", Format: FormatText, Caller: &CallerConfig{CallerSkipFrames: 6}}, os.Stdout)
 
 // set global Zerolog logger
 func Init(stage string, cfg Config, serviceAlias string, serviceVersion string, w io.Writer) (err error) {
@@ -31,6 +31,12 @@ func Init(stage string, cfg Config, serviceAlias string, serviceVersion string, 
 
 	if cfg.Format == "" {
 		cfg.Format = FormatText
+	}
+
+	if cfg.Caller == nil {
+		cfg.Caller = &CallerConfig{
+			CallerSkipFrames: 2,
+		}
 	}
 
 	if cfg.Sentry == nil || !cfg.Sentry.Enable || cfg.Sentry.DSN == "" {
@@ -82,7 +88,7 @@ func newZerolog(cfg Config, w io.Writer) (logger zerolog.Logger, err error) {
 	zerolog.TimeFieldFormat = time.RFC3339Nano
 
 	// CallerSkipFrameCount is the number of stack frames to skip to find the caller.
-	zerolog.CallerSkipFrameCount = 2
+	zerolog.CallerSkipFrameCount = cfg.Caller.CallerSkipFrames
 
 	output := w
 
@@ -94,7 +100,10 @@ func newZerolog(cfg Config, w io.Writer) (logger zerolog.Logger, err error) {
 			zerolog.TimestampFieldName,
 			zerolog.LevelFieldName,
 			zerolog.MessageFieldName,
-			zerolog.CallerFieldName,
+		}
+
+		if !cfg.Caller.Disabled {
+			out.PartsOrder = append(out.PartsOrder, zerolog.CallerFieldName)
 		}
 
 		out.FormatMessage = func(i interface{}) string {
@@ -113,7 +122,13 @@ func newZerolog(cfg Config, w io.Writer) (logger zerolog.Logger, err error) {
 		return logger, err
 	}
 
-	logger = zerolog.New(output).With().Timestamp().Caller().Logger().Level(level)
+	lctx := zerolog.New(output).With().Timestamp()
+
+	if !cfg.Caller.Disabled {
+		lctx = lctx.Caller()
+	}
+
+	logger = lctx.Logger().Level(level)
 
 	stdlog.SetFlags(0)
 	stdlog.SetOutput(logger)

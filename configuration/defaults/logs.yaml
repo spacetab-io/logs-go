@@ -1,9 +1,11 @@
 defaults:
-  logs:
+  log:
     level: debug
     format: text
     no_color: false
-    show_caller: true
+    caller:
+      hide_caller: false
+      skip_frames: 2
     sentry:
       enable: false
       dsn: ""
