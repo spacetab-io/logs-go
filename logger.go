@@ -35,7 +35,7 @@ var logger, _ = newZerolog(
 		Format: FormatText,
 		Caller: &CallerConfig{CallerSkipFrames: standAloneCallerSkipFrames},
 	},
-	nil,
+	os.Stdout,
 )
 
 // set global Zerolog logger
