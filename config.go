@@ -23,4 +23,5 @@ type Config struct {
 type SentryConfig struct {
 	DSN    string `yaml:"dsn"`
 	Enable bool   `yaml:"enable"`
+	Debug  bool   `yaml:"debug"`
 }

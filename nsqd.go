@@ -1,27 +1,76 @@
 package log
 
 import (
+	"strings"
+
 	"github.com/rs/zerolog"
 )
 
 type NSQLogger struct {
-	level zerolog.Level
+	logger zerolog.Logger
 }
 
 func NewNSQLogger(logLevel string) NSQLogger {
+	l := logger.With().CallerWithSkipFrameCount(4).Logger() //nolint:gomnd // Frame count to set correctly NSQ log line
 	lvl, _ := zerolog.ParseLevel(logLevel)
 
-	return NSQLogger{level: lvl}
+	l.Level(lvl)
+
+	return NSQLogger{logger: l}
 }
 
 func (nl NSQLogger) Output(calldepth int, s string) error {
-	WithLevel(nl.level).Msg(s)
+	output := strings.SplitN(s, " ", 2)
+
+	if len(output) <= 1 {
+		nl.defaultOutput(s)
+
+		return nil
+	}
+
+	logLvl := parseNSQLogLvl(output[0])
+	if logLvl == zerolog.NoLevel {
+		nl.defaultOutput(s)
+
+		return nil
+	}
+
+	nl.logger.WithLevel(logLvl).Msg(strings.TrimSpace(output[1]))
 
 	return nil
 }
 
+func (nl NSQLogger) defaultOutput(s string) {
+	nl.logger.Log().Msg(s)
+}
+
+func parseNSQLogLvl(s string) zerolog.Level {
+	var lvl zerolog.Level
+
+	switch s {
+	case "TRC":
+		lvl = zerolog.TraceLevel
+	case "DBG":
+		lvl = zerolog.DebugLevel
+	case "INF":
+		lvl = zerolog.InfoLevel
+	case "WRN":
+		lvl = zerolog.WarnLevel
+	case "ERR":
+		lvl = zerolog.ErrorLevel
+	case "FTL":
+		lvl = zerolog.FatalLevel
+	case "PNC":
+		lvl = zerolog.PanicLevel
+	default:
+		lvl = zerolog.NoLevel
+	}
+
+	return lvl
+}
+
 func (nl NSQLogger) LogLevel() int {
-	return nsqLogLvlFromZerologLogLvl(nl.level)
+	return nsqLogLvlFromZerologLogLvl(nl.logger.GetLevel())
 }
 
 func nsqLogLvlFromZerologLogLvl(level zerolog.Level) int {

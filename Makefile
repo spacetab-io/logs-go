@@ -1,41 +1,31 @@
 # ----
 ## LINTER stuff start
-LINTER_VERSION=v1.27.0
 
-get_lint_binary:
-	@[ -f ./golangci-lint ] && echo "golangci-lint exists" || ( echo "getting golangci-lint" && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ./ $(LINTER_VERSION) && ./golangci-lint --version )
-.PHONY: get_lint_binary
+linter_include_check:
+	@[ -f linter.mk ] && echo "linter.mk include exists" || (echo "getting linter.mk from github.com" && curl -sO https://raw.githubusercontent.com/spacetab-io/makefiles/master/golang/linter.mk)
 
-get_lint_config:
-	@[ -f .golangci.yml ] && echo ".golangci.yml exists" || ( echo "getting .golangci.yml" && curl -O https://raw.githubusercontent.com/microparts/docker-golang/master/.golangci.yml )
-.PHONY: get_lint_config
-
-lint: get_lint_binary get_lint_config
-	./golangci-lint run -v
 .PHONY: lint
-
-lint_quiet: get_lint_binary get_lint_config
-	@./golangci-lint run
-.PHONY: lint_quiet
+lint: linter_include_check
+	make -f linter.mk go_lint
 
 ## LINTER stuff end
 # ----
 
 # ----
-## TEST stuff start
+## TESTS stuff start
 
-test-unit:
-	go test $$(go list ./...) --race --cover -count=1 -timeout 1s -coverprofile=c.out -v
-.PHONY: test-unit
+tests_include_check:
+	@[ -f tests.mk ] && echo "tests.mk include exists" || (echo "getting tests.mk from github.com" && curl -sO https://raw.githubusercontent.com/spacetab-io/makefiles/master/golang/tests.mk)
 
-coverage-html:
-	go tool cover -html=c.out -o coverage.html
-.PHONE: coverage-html
+tests: tests_include_check
+	@make -f tests.mk go_tests
+.PHONY: tests
 
-test: test-unit coverage-html
-.PHONY: test
+tests_html: tests_include_check
+	@make -f tests.mk go_tests_html
+.PHONY: tests_html
 
-## TEST stuff end
+## TESTS stuff end
 # ----
 
 circle:

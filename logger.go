@@ -9,9 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/getsentry/raven-go"
-	"github.com/google/uuid"
-	"github.com/pkg/errors"
+	"github.com/getsentry/sentry-go"
 	"github.com/rs/zerolog"
 )
 
@@ -23,7 +21,7 @@ const (
 	standAloneCallerSkipFrames = 6
 )
 
-type zLogger struct {
+type ZLogger struct {
 	zerolog.Logger
 	cfg Config
 }
@@ -38,7 +36,7 @@ var logger, _ = newZerolog(
 	os.Stdout,
 )
 
-// set global Zerolog logger
+// set global Zerolog logger.
 func Init(stage string, cfg Config, serviceAlias string, serviceVersion string, w io.Writer) (err error) {
 	if w == nil {
 		w = os.Stdout
@@ -56,17 +54,34 @@ func Init(stage string, cfg Config, serviceAlias string, serviceVersion string, 
 
 	if cfg.Sentry == nil || !cfg.Sentry.Enable || cfg.Sentry.DSN == "" {
 		logger, err = newZerolog(cfg, w)
-		return err
+		if err != nil {
+			return fmt.Errorf("logger init newZerolog error: %w", err)
+		}
+
+		return nil
 	}
 
-	client, err := raven.New(cfg.Sentry.DSN)
+	sentrySyncTransport := sentry.NewHTTPSyncTransport()
+	sentrySyncTransport.Timeout = time.Second * 2 //nolint:gomnd // 2 second transport timeout
+
+	client, err := sentry.NewClient(sentry.ClientOptions{
+		Dsn:         cfg.Sentry.DSN,
+		DebugWriter: os.Stderr,
+		Debug:       cfg.Sentry.Debug,
+		ServerName:  serviceAlias,
+		Release:     serviceVersion,
+		Environment: stage,
+		Transport:   sentrySyncTransport,
+	})
 	if err != nil {
-		return err
+		return fmt.Errorf("logger init raven.New error: %w", err)
 	}
+
+	h := sentry.NewHub(client, sentry.NewScope())
 
 	pr, pw := io.Pipe()
 
-	go sentryPush(stage, serviceAlias, serviceVersion, client, pr)
+	go sentryPush(h, pr)
 
 	cfg.Format = FormatJSON
 	logger, err = newZerolog(cfg, io.MultiWriter(w, pw))
@@ -74,29 +89,7 @@ func Init(stage string, cfg Config, serviceAlias string, serviceVersion string, 
 	return err
 }
 
-func newZerolog(cfg Config, w io.Writer) (logger zLogger, err error) {
-	// setup a global function that transforms any error passed to
-	// zerolog to an error with stack strace.
-	zerolog.ErrorMarshalFunc = func(err error) interface{} {
-		if cfg.Sentry == nil {
-			return err
-		}
-
-		es := errWithStackTrace{
-			Err: err.Error(),
-		}
-
-		if _, ok := err.(stackTracer); !ok {
-			err = errors.WithStack(err)
-		}
-
-		if cfg.Sentry != nil && cfg.Sentry.Enable {
-			es.Stacktrace = stackTraceToSentry(err.(stackTracer).StackTrace())
-		}
-
-		return &es
-	}
-
+func newZerolog(cfg Config, w io.Writer) (logger ZLogger, err error) {
 	// UNIX Time is faster and smaller than most timestamps
 	// If you set zerolog.TimeFieldFormat to an empty string,
 	// logs will write with UNIX time
@@ -159,19 +152,20 @@ func getLevel(lvl string) (zerolog.Level, error) {
 
 	level, err := zerolog.ParseLevel(lvl)
 	if err != nil {
-		return zerolog.DebugLevel, err
+		return zerolog.DebugLevel, fmt.Errorf("get level error: %w", err)
 	}
 
 	return level, nil
 }
 
-func Logger() zerolog.Logger {
-	return logger.Logger
+func Logger() ZLogger {
+	return logger
 }
 
 // Output duplicates the global logger and sets w as its output.
 func Output(w io.Writer) zerolog.Logger {
 	l, _ := newZerolog(logger.cfg, w)
+
 	return l.Logger
 }
 
@@ -296,7 +290,11 @@ func Ctx(ctx context.Context) *zerolog.Logger {
 
 func contextFields(ctx context.Context) (fields map[string]interface{}) {
 	fields = make(map[string]interface{})
-	if requestID, ok := ctx.Value(ctxRequestIDKey).(uuid.UUID); ok && requestID != uuid.Nil {
+	if requestID, ok := ctx.Value(ctxRequestIDKey).(fmt.Stringer); ok && requestID.String() != "00000000-0000-0000-0000-000000000000" {
+		fields[ctxRequestIDKey] = requestID.String()
+	}
+
+	if requestID, ok := ctx.Value(ctxRequestIDKey).(string); ok && requestID != "00000000-0000-0000-0000-000000000000" {
 		fields[ctxRequestIDKey] = requestID
 	}
 

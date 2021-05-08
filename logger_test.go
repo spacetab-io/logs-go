@@ -1,4 +1,5 @@
-package log
+//nolint: paralleltest
+package log_test
 
 import (
 	"bytes"
@@ -7,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
+	log "github.com/spacetab-io/logs-go/v2"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -21,10 +23,10 @@ func TestInit(t *testing.T) {
 		assert.NoError(t, err, "logger init")
 	})
 	t.Run("default format init", func(t *testing.T) {
-		err := Init("test", Config{
+		err := log.Init("test", log.Config{
 			Level:   "trace",
 			NoColor: true,
-			Caller: &CallerConfig{
+			Caller: &log.CallerConfig{
 				Disabled:         false,
 				CallerSkipFrames: 2,
 			},
@@ -32,9 +34,9 @@ func TestInit(t *testing.T) {
 		assert.NoError(t, err, "logger init")
 	})
 	t.Run("default level init", func(t *testing.T) {
-		err := Init("test", Config{
+		err := log.Init("test", log.Config{
 			NoColor: true,
-			Caller: &CallerConfig{
+			Caller: &log.CallerConfig{
 				Disabled:         false,
 				CallerSkipFrames: 2,
 			},
@@ -42,14 +44,14 @@ func TestInit(t *testing.T) {
 		assert.NoError(t, err, "logger init")
 	})
 	t.Run("default caller init", func(t *testing.T) {
-		err := Init("test", Config{
+		err := log.Init("test", log.Config{
 			NoColor: true,
 			Caller:  nil,
 		}, "log", "v2.*.*", nil)
 		assert.NoError(t, err, "logger init")
 	})
 	t.Run("wrong level init", func(t *testing.T) {
-		err := Init("test", Config{
+		err := log.Init("test", log.Config{
 			NoColor: true,
 			Level:   "fart",
 		}, "log", "v2.*.*", nil)
@@ -64,7 +66,7 @@ func TestOutput(t *testing.T) {
 	}
 
 	out := &bytes.Buffer{}
-	l := Output(out)
+	l := log.Output(out)
 	l.Trace().Msg("trace")
 
 	exp := "TRC |> trace <|"
@@ -79,12 +81,12 @@ func TestLevel(t *testing.T) {
 		t.FailNow()
 	}
 
-	logger.Trace().Msg("test trace")
+	log.Trace().Msg("test trace")
 
 	exp := "test trace"
 	assert.Contains(t, out.String(), exp)
 
-	l2 := Level(zerolog.WarnLevel)
+	l2 := log.Level(zerolog.WarnLevel)
 	l2.Trace().Msg("test trace")
 
 	exp = ""
@@ -99,12 +101,12 @@ func TestLevelString(t *testing.T) {
 		t.FailNow()
 	}
 
-	logger.Trace().Msg("test trace")
+	log.Trace().Msg("test trace")
 
 	exp := "test trace"
 	assert.Contains(t, out.String(), exp)
 
-	l2 := LevelString("warn")
+	l2 := log.LevelString("warn")
 	l2.Trace().Msg("test trace")
 
 	exp = ""
@@ -119,7 +121,7 @@ func TestTrace(t *testing.T) {
 		t.FailNow()
 	}
 
-	Trace().Msg("trace")
+	log.Trace().Msg("trace")
 
 	exp := "TRC |> trace <|"
 	assert.Contains(t, out.String(), exp)
@@ -133,7 +135,7 @@ func TestDebug(t *testing.T) {
 		t.FailNow()
 	}
 
-	Debug().Msg("debug")
+	log.Debug().Msg("debug")
 
 	exp := "DBG |> debug <|"
 	assert.Contains(t, out.String(), exp)
@@ -147,7 +149,7 @@ func TestInfo(t *testing.T) {
 		t.FailNow()
 	}
 
-	Info().Msg("info")
+	log.Info().Msg("info")
 
 	exp := "INF |> info <|"
 	assert.Contains(t, out.String(), exp)
@@ -161,7 +163,7 @@ func TestWarn(t *testing.T) {
 		t.FailNow()
 	}
 
-	Warn().Msg("warn")
+	log.Warn().Msg("warn")
 
 	exp := "WRN |> warn <|"
 	assert.Contains(t, out.String(), exp)
@@ -175,11 +177,13 @@ func TestError(t *testing.T) {
 		t.FailNow()
 	}
 
-	Error().Msg("error")
+	log.Error().Msg("error")
 
 	exp := "ERR |> error <|"
 	assert.Contains(t, out.String(), exp)
 }
+
+var errForTest = errors.New("some err")
 
 func TestErr(t *testing.T) {
 	out := &bytes.Buffer{}
@@ -189,7 +193,7 @@ func TestErr(t *testing.T) {
 		t.FailNow()
 	}
 
-	Err(errors.New("some err")).Msg("error")
+	log.Err(errForTest).Msg("error")
 
 	exp := "ERR |> error <| "
 	assert.Contains(t, out.String(), exp)
@@ -199,11 +203,11 @@ func TestErr(t *testing.T) {
 }
 
 func initLog(w io.Writer) error {
-	return Init("test", Config{
+	return log.Init("test", log.Config{
 		Level:   "trace",
 		Format:  "text",
 		NoColor: true,
-		Caller: &CallerConfig{
+		Caller: &log.CallerConfig{
 			Disabled:         false,
 			CallerSkipFrames: 2,
 		},
