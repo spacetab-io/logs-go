@@ -19,7 +19,7 @@ func Test_contextFields(t *testing.T) {
 	tcs := []tc{
 		{
 			name: "context with requers_id",
-			in:   context.WithValue(context.WithValue(context.Background(), "environment", "test"), ctxRequestIDKey, rID),
+			in:   context.WithValue(context.Background(), ctxRequestIDKey, rID), //nolint:staticcheck // да ладно!
 			exp:  map[string]interface{}{ctxRequestIDKey: rID.String()},
 		},
 		{
@@ -29,7 +29,7 @@ func Test_contextFields(t *testing.T) {
 		},
 		{
 			name: "string equest id",
-			in:   context.WithValue(context.WithValue(context.Background(), "environment", "test"), ctxRequestIDKey, rID.String()),
+			in:   context.WithValue(context.Background(), ctxRequestIDKey, rID.String()), //nolint:staticcheck // ну хорош!
 			exp:  map[string]interface{}{ctxRequestIDKey: rID.String()},
 		},
 	}

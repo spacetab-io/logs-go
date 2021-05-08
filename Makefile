@@ -6,7 +6,7 @@ linter_include_check:
 
 .PHONY: lint
 lint: linter_include_check
-	@make -f linter.mk go_lint
+	make -f linter.mk go_lint
 
 ## LINTER stuff end
 # ----

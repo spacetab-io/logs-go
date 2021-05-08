@@ -11,9 +11,10 @@ jobs:
       - checkout
       - run: go mod vendor
       - run:
-          name: "Create a temp directory for artifacts"
+          name: "Create a temp directory for linter and artifacts"
           command: |
             mkdir -p /tmp/artifacts
+            mkdir ./bin
       - run:
           command: |
             make lint
