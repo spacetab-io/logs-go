@@ -3,20 +3,15 @@ package log
 import (
 	"strings"
 
-	"github.com/rs/zerolog"
+	"go.uber.org/zap/zapcore"
 )
 
 type NSQLogger struct {
-	logger zerolog.Logger
+	logger Logger
 }
 
-func NewNSQLogger(logLevel string) NSQLogger {
-	l := logger.With().CallerWithSkipFrameCount(4).Logger() //nolint:gomnd // Frame count to set correctly NSQ log line
-	lvl, _ := zerolog.ParseLevel(logLevel)
-
-	l.Level(lvl)
-
-	return NSQLogger{logger: l}
+func NewNSQLogger(logger Logger) NSQLogger {
+	return NSQLogger{logger: logger}
 }
 
 func (nl NSQLogger) Output(calldepth int, s string) error {
@@ -29,67 +24,63 @@ func (nl NSQLogger) Output(calldepth int, s string) error {
 	}
 
 	logLvl := parseNSQLogLvl(output[0])
-	if logLvl == zerolog.NoLevel {
+	if logLvl == -2 {
 		nl.defaultOutput(s)
 
 		return nil
 	}
 
-	nl.logger.WithLevel(logLvl).Msg(strings.TrimSpace(output[1]))
+	nl.logger.ForLogLevel(logLvl).Msg(strings.TrimSpace(output[1]))
 
 	return nil
 }
 
 func (nl NSQLogger) defaultOutput(s string) {
-	nl.logger.Log().Msg(s)
+	nl.logger.Info().Msg(s)
 }
 
-func parseNSQLogLvl(s string) zerolog.Level {
-	var lvl zerolog.Level
+func parseNSQLogLvl(s string) zapcore.Level {
+	var lvl zapcore.Level
 
 	switch s {
-	case "TRC":
-		lvl = zerolog.TraceLevel
-	case "DBG":
-		lvl = zerolog.DebugLevel
+	case "TRC", "DBG":
+		lvl = zapcore.DebugLevel
 	case "INF":
-		lvl = zerolog.InfoLevel
+		lvl = zapcore.InfoLevel
 	case "WRN":
-		lvl = zerolog.WarnLevel
+		lvl = zapcore.WarnLevel
 	case "ERR":
-		lvl = zerolog.ErrorLevel
+		lvl = zapcore.ErrorLevel
 	case "FTL":
-		lvl = zerolog.FatalLevel
+		lvl = zapcore.FatalLevel
 	case "PNC":
-		lvl = zerolog.PanicLevel
+		lvl = zapcore.PanicLevel
 	default:
-		lvl = zerolog.NoLevel
+		lvl = -2
 	}
 
 	return lvl
 }
 
 func (nl NSQLogger) LogLevel() int {
-	return nsqLogLvlFromZerologLogLvl(nl.logger.GetLevel())
+	return nsqLogLvlFromZerologLogLvl(nl.logger.Level)
 }
 
-func nsqLogLvlFromZerologLogLvl(level zerolog.Level) int {
+func nsqLogLvlFromZerologLogLvl(level zapcore.Level) int {
 	var nsqlLL int
 
 	switch level {
-	case zerolog.TraceLevel:
-	case zerolog.DebugLevel:
+	case zapcore.DebugLevel:
 		nsqlLL = 0
-	case zerolog.InfoLevel:
+	case zapcore.InfoLevel:
 		nsqlLL = 1
-	case zerolog.WarnLevel:
+	case zapcore.WarnLevel:
 		nsqlLL = 2
-	case zerolog.ErrorLevel:
-	case zerolog.FatalLevel:
-	case zerolog.PanicLevel:
+	case zapcore.ErrorLevel:
+	case zapcore.FatalLevel:
+	case zapcore.PanicLevel:
 		nsqlLL = 3
-	case zerolog.NoLevel:
-	case zerolog.Disabled:
+	case -2:
 		nsqlLL = 4
 	}
 

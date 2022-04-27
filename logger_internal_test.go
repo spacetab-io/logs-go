@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/spacetab-io/configuration-structs-go/contracts"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -11,26 +12,24 @@ func Test_contextFields(t *testing.T) {
 	type tc struct {
 		name string
 		in   context.Context
-		exp  map[string]interface{}
+		exp  map[contracts.ContextKey]interface{}
 	}
-
-	rID := newTestUUID("45bf025d-9e46-45a4-8562-c37c4d48a9ca")
 
 	tcs := []tc{
 		{
 			name: "context with requers_id",
-			in:   context.WithValue(context.Background(), ctxRequestIDKey, rID), //nolint:staticcheck // да ладно!
-			exp:  map[string]interface{}{ctxRequestIDKey: rID.String()},
+			in:   context.WithValue(context.TODO(), contracts.ContextKeyRequestID, newTestUUID("45bf025d-9e46-45a4-8562-c37c4d48a9ca")), //nolint:staticcheck // да ладно!
+			exp:  map[contracts.ContextKey]interface{}{contracts.ContextKeyRequestID: newTestUUID("45bf025d-9e46-45a4-8562-c37c4d48a9ca").String()},
 		},
 		{
 			name: "empty context",
 			in:   context.Background(),
-			exp:  map[string]interface{}{},
+			exp:  map[contracts.ContextKey]interface{}{},
 		},
 		{
-			name: "string equest id",
-			in:   context.WithValue(context.Background(), ctxRequestIDKey, rID.String()), //nolint:staticcheck // ну хорош!
-			exp:  map[string]interface{}{ctxRequestIDKey: rID.String()},
+			name: "string request id",
+			in:   context.WithValue(context.TODO(), contracts.ContextKeyRequestID, newTestUUID("45bf025d-9e46-45a4-8562-c37c4d48a9ca").String()), //nolint:staticcheck // ну хорош!
+			exp:  map[contracts.ContextKey]interface{}{contracts.ContextKeyRequestID: newTestUUID("45bf025d-9e46-45a4-8562-c37c4d48a9ca").String()},
 		},
 	}
 

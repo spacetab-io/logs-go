@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"testing"
 
-	log "github.com/spacetab-io/logs-go/v2"
+	log "github.com/spacetab-io/logs-go/v3"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -33,9 +33,9 @@ func TestNSQLogger_Output(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			out := &bytes.Buffer{}
-			_ = initLog(out)
+			logger, _ := initLog(t, out)
 
-			nsqdLogger := log.NewNSQLogger("info")
+			nsqdLogger := log.NewNSQLogger(logger)
 
 			err := nsqdLogger.Output(2, tc.in)
 			if !assert.NoError(t, err, "nsqdLogger.Output error") {

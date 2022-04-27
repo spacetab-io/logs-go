@@ -8,34 +8,38 @@ sentry hook.
 
 ## Usage
 
-Initiate new logger with filled `log.Config` and use it as common zerolog
+Initiate new logger filled with struct that implements `LogsConfigInterface` and use it as common zerolog
 
 ```go
 package main
 
 import (
-	log "github.com/spacetab-io/logs-go/v2"
+	"os"
+
+	cfgstructs "github.com/spacetab-io/configuration-structs-go"
+	log "github.com/spacetab-io/logs-go/v3"
 )
 
 func main() {
-	conf := log.Config{
+	conf := cfgstructs.Logs{
 		Level:  "warn",
-		Format: "text",
-		Caller: &log.CallerConfig{
+		Format: cfgstructs.LogFormatText,
+		Caller: &cfgstructs.CallerConfig{
 			Disabled:         false,
 			CallerSkipFrames: 2,
 		},
-		Sentry: &log.SentryConfig{
+		Sentry: &cfgstructs.SentryConfig{
 			Enable: true,
 			DSN:    "http://dsn.sentry.com",
 		},
 	}
 
-	if err := log.Init("test", conf, "logs-go", "v2.*.*", nil); err != nil {
+	logger, err := log.Init("test", conf, "serviceName", "v3.1.2", os.Stdout)
+	if err != nil {
 		panic(err)
 	}
 
-	log.Warn().Msg("log some warning")
+	logger.Warn().Msg("log some warning")
 }
 ```
 

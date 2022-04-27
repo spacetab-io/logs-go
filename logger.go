@@ -1,311 +1,196 @@
-// Package log provides a global logger for zerolog.
 package log
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
-	stdlog "log"
-	"os"
-	"time"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/rs/zerolog"
+	cfgstructs "github.com/spacetab-io/configuration-structs-go"
+	"github.com/spacetab-io/configuration-structs-go/contracts"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
-const (
-	defaultLevel    = "debug"
-	ctxRequestIDKey = "request_id"
+var ErrEmptyOutput = errors.New("log output is not defined")
 
-	defaultCallerSkipFrames    = 2
-	standAloneCallerSkipFrames = 6
-)
-
-type ZLogger struct {
-	zerolog.Logger
-	cfg Config
-}
-
-// logger is the global logger.
-var logger, _ = newZerolog(
-	Config{
-		Level:  defaultLevel,
-		Format: FormatText,
-		Caller: &CallerConfig{CallerSkipFrames: standAloneCallerSkipFrames},
-	},
-	os.Stdout,
-)
-
-// set global Zerolog logger.
-func Init(stage string, cfg Config, serviceAlias string, serviceVersion string, w io.Writer) (err error) {
-	if w == nil {
-		w = os.Stdout
+func contextFields(ctx context.Context) (fields map[contracts.ContextKey]interface{}) {
+	fields = make(map[contracts.ContextKey]interface{})
+	if requestID, ok := ctx.Value(contracts.ContextKeyRequestID).(fmt.Stringer); ok && requestID.String() != "00000000-0000-0000-0000-000000000000" {
+		fields[contracts.ContextKeyRequestID] = requestID.String()
 	}
 
-	if cfg.Format == "" {
-		cfg.Format = FormatText
-	}
-
-	if cfg.Caller == nil {
-		cfg.Caller = &CallerConfig{
-			CallerSkipFrames: defaultCallerSkipFrames,
-		}
-	}
-
-	if cfg.Sentry == nil || !cfg.Sentry.Enable || cfg.Sentry.DSN == "" {
-		logger, err = newZerolog(cfg, w)
-		if err != nil {
-			return fmt.Errorf("logger init newZerolog error: %w", err)
-		}
-
-		return nil
-	}
-
-	sentrySyncTransport := sentry.NewHTTPSyncTransport()
-	sentrySyncTransport.Timeout = time.Second * 2 //nolint:gomnd // 2 second transport timeout
-
-	client, err := sentry.NewClient(sentry.ClientOptions{
-		Dsn:         cfg.Sentry.DSN,
-		DebugWriter: os.Stderr,
-		Debug:       cfg.Sentry.Debug,
-		ServerName:  serviceAlias,
-		Release:     serviceVersion,
-		Environment: stage,
-		Transport:   sentrySyncTransport,
-	})
-	if err != nil {
-		return fmt.Errorf("logger init raven.New error: %w", err)
-	}
-
-	h := sentry.NewHub(client, sentry.NewScope())
-
-	pr, pw := io.Pipe()
-
-	go sentryPush(h, pr)
-
-	cfg.Format = FormatJSON
-	logger, err = newZerolog(cfg, io.MultiWriter(w, pw))
-
-	return err
-}
-
-func newZerolog(cfg Config, w io.Writer) (logger ZLogger, err error) {
-	// UNIX Time is faster and smaller than most timestamps
-	// If you set zerolog.TimeFieldFormat to an empty string,
-	// logs will write with UNIX time
-	zerolog.TimeFieldFormat = time.RFC3339Nano
-
-	// CallerSkipFrameCount is the number of stack frames to skip to find the caller.
-	zerolog.CallerSkipFrameCount = cfg.Caller.CallerSkipFrames
-
-	output := w
-
-	if cfg.Format == "text" {
-		// pretty print during development
-		out := zerolog.ConsoleWriter{Out: w, TimeFormat: zerolog.TimeFieldFormat, NoColor: cfg.NoColor}
-
-		out.PartsOrder = []string{
-			zerolog.TimestampFieldName,
-			zerolog.LevelFieldName,
-			zerolog.MessageFieldName,
-		}
-
-		if !cfg.Caller.Disabled {
-			out.PartsOrder = append(out.PartsOrder, zerolog.CallerFieldName)
-		}
-
-		out.FormatMessage = func(i interface{}) string {
-			if i == nil {
-				return ""
-			}
-
-			return fmt.Sprintf("|> %s <|", i)
-		}
-
-		output = out
-	}
-
-	level, err := getLevel(cfg.Level)
-	if err != nil {
-		return logger, err
-	}
-
-	lctx := zerolog.New(output).With().Timestamp()
-
-	if !cfg.Caller.Disabled {
-		lctx = lctx.Caller()
-	}
-
-	logger.Logger = lctx.Logger().Level(level)
-	logger.cfg = cfg
-
-	stdlog.SetFlags(0)
-	stdlog.SetOutput(logger)
-
-	return logger, nil
-}
-
-func getLevel(lvl string) (zerolog.Level, error) {
-	if lvl == "" {
-		lvl = defaultLevel
-	}
-
-	level, err := zerolog.ParseLevel(lvl)
-	if err != nil {
-		return zerolog.DebugLevel, fmt.Errorf("get level error: %w", err)
-	}
-
-	return level, nil
-}
-
-func Logger() ZLogger {
-	return logger
-}
-
-// Output duplicates the global logger and sets w as its output.
-func Output(w io.Writer) zerolog.Logger {
-	l, _ := newZerolog(logger.cfg, w)
-
-	return l.Logger
-}
-
-// With creates a child logger with the field added to its context.
-func With() zerolog.Context {
-	return logger.With()
-}
-
-// Level creates a child logger with the minimum accepted level set to level.
-func Level(level zerolog.Level) zerolog.Logger {
-	return logger.Level(level)
-}
-
-// LevelString creates a child logger with the minimum accepted level set to level passed as string.
-func LevelString(lvl string) zerolog.Logger {
-	level, _ := getLevel(lvl)
-
-	return logger.Level(level)
-}
-
-// Sample returns a logger with the s sampler.
-func Sample(s zerolog.Sampler) zerolog.Logger {
-	return logger.Sample(s)
-}
-
-// Hook returns a logger with the h Hook.
-func Hook(h zerolog.Hook) zerolog.Logger {
-	return logger.Hook(h)
-}
-
-// Err starts a new message with error level with err as a field if not nil or
-// with info level if err is nil.
-//
-// You must call Msg on the returned event in order to send the event.
-func Err(err error) *zerolog.Event {
-	return logger.Err(err)
-}
-
-// Trace starts a new message with trace level.
-//
-// You must call Msg on the returned event in order to send the event.
-func Trace() *zerolog.Event {
-	return logger.Trace()
-}
-
-// Debug starts a new message with debug level.
-//
-// You must call Msg on the returned event in order to send the event.
-func Debug() *zerolog.Event {
-	return logger.Debug()
-}
-
-// Info starts a new message with info level.
-//
-// You must call Msg on the returned event in order to send the event.
-func Info() *zerolog.Event {
-	return logger.Info()
-}
-
-// Warn starts a new message with warn level.
-//
-// You must call Msg on the returned event in order to send the event.
-func Warn() *zerolog.Event {
-	return logger.Warn()
-}
-
-// Error starts a new message with error level.
-//
-// You must call Msg on the returned event in order to send the event.
-func Error() *zerolog.Event {
-	return logger.Error()
-}
-
-// Fatal starts a new message with fatal level. The os.Exit(1) function
-// is called by the Msg method.
-//
-// You must call Msg on the returned event in order to send the event.
-func Fatal() *zerolog.Event {
-	return logger.Fatal()
-}
-
-// Panic starts a new message with panic level. The message is also sent
-// to the panic function.
-//
-// You must call Msg on the returned event in order to send the event.
-func Panic() *zerolog.Event {
-	return logger.Panic()
-}
-
-// WithLevel starts a new message with level.
-//
-// You must call Msg on the returned event in order to send the event.
-func WithLevel(level zerolog.Level) *zerolog.Event {
-	return logger.WithLevel(level)
-}
-
-// Log starts a new message with no level. Setting zerolog.GlobalLevel to
-// zerolog.Disabled will still disable events produced by this method.
-//
-// You must call Msg on the returned event in order to send the event.
-func Log() *zerolog.Event {
-	return logger.Log()
-}
-
-// Print sends a log event using debug level and no extra field.
-// Arguments are handled in the manner of fmt.Print.
-func Print(v ...interface{}) {
-	logger.Print(v...)
-}
-
-// Printf sends a log event using debug level and no extra field.
-// Arguments are handled in the manner of fmt.Printf.
-func Printf(format string, v ...interface{}) {
-	logger.Printf(format, v...)
-}
-
-// Ctx returns the logger associated with the ctx. If no logger
-// is associated, a disabled logger is returned.
-func Ctx(ctx context.Context) *zerolog.Logger {
-	return zerolog.Ctx(ctx)
-}
-
-func contextFields(ctx context.Context) (fields map[string]interface{}) {
-	fields = make(map[string]interface{})
-	if requestID, ok := ctx.Value(ctxRequestIDKey).(fmt.Stringer); ok && requestID.String() != "00000000-0000-0000-0000-000000000000" {
-		fields[ctxRequestIDKey] = requestID.String()
-	}
-
-	if requestID, ok := ctx.Value(ctxRequestIDKey).(string); ok && requestID != "00000000-0000-0000-0000-000000000000" {
-		fields[ctxRequestIDKey] = requestID
+	if requestID, ok := ctx.Value(contracts.ContextKeyRequestID).(string); ok && requestID != "00000000-0000-0000-0000-000000000000" {
+		fields[contracts.ContextKeyRequestID] = requestID
 	}
 
 	return fields
 }
 
-// With creates a child logger with the field added to its context.
-func WithCtx(ctx context.Context) *zerolog.Logger {
-	l := With()
-	fields := contextFields(ctx)
-	l2 := l.Fields(fields).Logger()
+type Logger struct {
+	*zap.Logger
+	Level zapcore.Level
+	cfg   cfgstructs.LogsInterface
+}
 
-	return &l2
+func Init(cfg cfgstructs.LogsInterface, stage string, serviceAlias string, serviceVersion string, w io.Writer) (Logger, error) {
+	logLevel, err := zapcore.ParseLevel(cfg.GetLevel())
+	if err != nil {
+		return Logger{}, err
+	}
+
+	if w == nil {
+		return Logger{}, ErrEmptyOutput
+	}
+
+	// First, define our level-handling logic.
+	highPriority := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+		return lvl >= logLevel
+	})
+
+	lowPriority := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+		return lvl < logLevel
+	})
+
+	// High-priority output should also go to standard error, and low-priority
+	// output should also go to standard out.
+	consoleDebugging := zapcore.AddSync(w)
+	consoleErrors := zapcore.AddSync(w)
+
+	logConfig := zap.NewProductionEncoderConfig()
+	logConfig.EncodeTime = zapcore.RFC3339NanoTimeEncoder
+	logConfig.EncodeCaller = zapcore.FullCallerEncoder
+	logConfig.ConsoleSeparator = " | "
+	logConfig.EncodeLevel = zapcore.CapitalLevelEncoder
+	if cfg.IsColored() {
+		logConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+	}
+
+	var enc zapcore.Encoder
+
+	switch cfg.GetFormat() {
+	case "json":
+		enc = zapcore.NewJSONEncoder(logConfig)
+	case "text":
+		enc = zapcore.NewConsoleEncoder(logConfig)
+	}
+
+	cores := []zapcore.Core{
+		zapcore.NewCore(enc, consoleErrors, highPriority),
+		zapcore.NewCore(enc, consoleDebugging, lowPriority),
+	}
+
+	if cfg.IsSentryEnabled() {
+		sentryClient, err := sentry.NewClient(sentry.ClientOptions{
+			Dsn:   cfg.GetSentryDSN(),
+			Debug: cfg.SentryDebugEnabled(),
+			//AttachStacktrace: true,
+			ServerName:  serviceAlias,
+			Release:     serviceVersion,
+			Environment: stage,
+			Integrations: func(integrations []sentry.Integration) []sentry.Integration {
+				filtered := integrations[:0]
+				for _, integration := range integrations {
+					if integration.Name() != "Modules" {
+						filtered = append(filtered, integration)
+					}
+				}
+				return filtered
+			},
+		})
+		if err != nil {
+			return Logger{}, err
+		}
+
+		buf := &bytes.Buffer{}
+		sentryErrors := zapcore.AddSync(&zapcore.BufferedWriteSyncer{WS: zapcore.AddSync(buf)})
+		cores = append(
+			cores,
+			zapcore.NewCore(
+				&sentryEncoder{Encoder: zapcore.NewJSONEncoder(logConfig), client: sentryClient}, sentryErrors, highPriority,
+			),
+		)
+	}
+
+	// Join the outputs, encoders, and level-handling functions into
+	// zapcore.Cores, then tee the four cores together.
+	coresTee := zapcore.NewTee(cores...)
+
+	logger := zap.New(coresTee, zap.WithCaller(cfg.ShowCaller()), zap.AddCallerSkip(cfg.GetCallerSkipFrames()))
+
+	defer logger.Sync()
+
+	zl := Logger{Logger: logger, Level: logLevel, cfg: cfg}
+
+	return zl, nil
+}
+
+type Event struct {
+	*Logger
+	callerSkip int
+	lvl        zapcore.Level
+	msg        string
+	fields     []zapcore.Field
+}
+
+func (l Logger) newEvent(lvl zapcore.Level) *Event {
+	return &Event{Logger: &l, lvl: lvl, callerSkip: l.cfg.GetCallerSkipFrames()}
+}
+func (l Logger) Debug() *Event                        { return l.newEvent(zapcore.DebugLevel) }
+func (l Logger) Info() *Event                         { return l.newEvent(zapcore.InfoLevel) }
+func (l Logger) Warn() *Event                         { return l.newEvent(zapcore.WarnLevel) }
+func (l Logger) Error() *Event                        { return l.newEvent(zapcore.ErrorLevel) }
+func (l Logger) DPanic() *Event                       { return l.newEvent(zapcore.DPanicLevel) }
+func (l Logger) Panic() *Event                        { return l.newEvent(zapcore.PanicLevel) }
+func (l Logger) Fatal() *Event                        { return l.newEvent(zapcore.FatalLevel) }
+func (l Logger) ForLogLevel(lvl zapcore.Level) *Event { return l.newEvent(lvl) }
+
+func (l Logger) Printf(format string, v ...interface{}) {
+	l.Info().Msgf(format, v...)
+}
+
+func (e *Event) Str(key, value string) *Event {
+	e.fields = append(e.fields, zap.String(key, value))
+
+	return e
+}
+
+func (e *Event) Err(err error) *Event {
+	e.fields = append(e.fields, zap.Error(err))
+
+	return e
+}
+
+func (e Event) Msgf(format string, params ...interface{}) {
+	e.Logger.WithOptions(zap.AddCallerSkip(1))
+	e.Msg(fmt.Sprintf(format, params...))
+}
+
+func (e Event) Msg(msg string) {
+	l := e.Logger.Logger
+
+	switch e.lvl {
+	case zapcore.DebugLevel:
+		l.Debug(msg, e.fields...)
+	case zapcore.InfoLevel:
+		l.Info(msg, e.fields...)
+	case zapcore.WarnLevel:
+		l.Warn(msg, e.fields...)
+	case zapcore.ErrorLevel:
+		l.Error(msg, e.fields...)
+	case zapcore.DPanicLevel:
+		l.DPanic(msg, e.fields...)
+	case zapcore.PanicLevel:
+		l.Panic(msg, e.fields...)
+	case zapcore.FatalLevel:
+		l.Fatal(msg, e.fields...)
+	}
+}
+
+func (e *Event) Send() {
+	l := e.Logger.WithOptions(zap.AddCallerSkip(1))
+	e.Logger.Logger = l
+	e.Msg("n/a message")
 }

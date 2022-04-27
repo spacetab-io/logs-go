@@ -1,7 +1,9 @@
 package log
 
-type FHLogger struct{}
+type FHLogger struct {
+	Logger
+}
 
 func (fhl FHLogger) Printf(format string, v ...interface{}) {
-	Printf(format, v...)
+	fhl.Logger.Printf(format, v...)
 }
