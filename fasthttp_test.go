@@ -13,6 +13,7 @@ func TestFHLogger_Printf(t *testing.T) {
 
 	out := &bytes.Buffer{}
 	logger, err := initLog(t, out)
+
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}

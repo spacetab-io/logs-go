@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/spacetab-io/configuration-structs-go/contracts"
+	"github.com/spacetab-io/configuration-structs-go/v2/contracts"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -18,8 +18,8 @@ func Test_contextFields(t *testing.T) {
 	tcs := []tc{
 		{
 			name: "context with requers_id",
-			in:   context.WithValue(context.TODO(), contracts.ContextKeyRequestID, newTestUUID("45bf025d-9e46-45a4-8562-c37c4d48a9ca")), //nolint:staticcheck // да ладно!
-			exp:  map[contracts.ContextKey]interface{}{contracts.ContextKeyRequestID: newTestUUID("45bf025d-9e46-45a4-8562-c37c4d48a9ca").String()},
+			in:   context.WithValue(context.TODO(), contracts.ContextKeyRequestID, newTestUUID("45bf025d-9e46-45a4-8562-c37c4d48a9cb")),
+			exp:  map[contracts.ContextKey]interface{}{contracts.ContextKeyRequestID: newTestUUID("45bf025d-9e46-45a4-8562-c37c4d48a9cb").String()},
 		},
 		{
 			name: "empty context",
@@ -28,8 +28,8 @@ func Test_contextFields(t *testing.T) {
 		},
 		{
 			name: "string request id",
-			in:   context.WithValue(context.TODO(), contracts.ContextKeyRequestID, newTestUUID("45bf025d-9e46-45a4-8562-c37c4d48a9ca").String()), //nolint:staticcheck // ну хорош!
-			exp:  map[contracts.ContextKey]interface{}{contracts.ContextKeyRequestID: newTestUUID("45bf025d-9e46-45a4-8562-c37c4d48a9ca").String()},
+			in:   context.WithValue(context.TODO(), contracts.ContextKeyRequestID, newTestUUID("45bf025d-9e46-45a4-8562-c37c4d48a9cc").String()),
+			exp:  map[contracts.ContextKey]interface{}{contracts.ContextKeyRequestID: newTestUUID("45bf025d-9e46-45a4-8562-c37c4d48a9cc").String()},
 		},
 	}
 

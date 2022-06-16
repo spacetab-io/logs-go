@@ -41,7 +41,12 @@ func (e *sentryEncoder) Clone() zapcore.Encoder {
 
 func (e *sentryEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field) (*buffer.Buffer, error) {
 	if entry.Level < zapcore.ErrorLevel {
-		return e.Encoder.EncodeEntry(entry, fields)
+		buf, err := e.Encoder.EncodeEntry(entry, fields)
+		if err != nil {
+			return nil, fmt.Errorf("encode entry error: %w", err)
+		}
+
+		return buf, nil
 	}
 
 	event := sentry.NewEvent()
@@ -56,25 +61,39 @@ func (e *sentryEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field)
 	}
 
 	for k, v := range final.Fields {
-		if err, ok := v.(error); ok && err != nil {
+		if k == "error" {
+			st := sentry.NewStacktrace()
+			st.Frames = append(st.Frames, frameFromCaller(entry.Caller))
 			event.Exception = []sentry.Exception{{
 				Type:       entry.Message,
 				Value:      entry.Caller.String(),
-				Stacktrace: sentry.ExtractStacktrace(err),
+				Stacktrace: st,
 			}}
 		} else {
 			event.Extra[k] = v
 		}
-
 	}
 
 	e.client.CaptureEvent(event, nil, sentryModifier)
 
 	e.client.Flush(1 * time.Second)
 
-	return e.Encoder.EncodeEntry(entry, fields)
+	buf, err := e.Encoder.EncodeEntry(entry, fields)
+	if err != nil {
+		return nil, fmt.Errorf("encode entry error: %w", err)
+	}
+
+	return buf, nil
 }
 
-func makeAnError(err zapcore.Field, caller zapcore.EntryCaller) error {
-	return fmt.Errorf("error: %s\nstacktrace: %s", err.String, caller.String())
+func frameFromCaller(caller zapcore.EntryCaller) sentry.Frame {
+	return sentry.Frame{
+		Function: caller.Function,
+		Module:   caller.Function,
+		Filename: caller.File,
+		AbsPath:  caller.FullPath(),
+		Package:  caller.TrimmedPath(),
+		Lineno:   caller.Line,
+		InApp:    caller.Defined,
+	}
 }

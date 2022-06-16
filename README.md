@@ -3,12 +3,12 @@ logs-go
 
 [![CircleCI](https://circleci.com/gh/spacetab-io/logs-go.svg?style=shield)](https://circleci.com/gh/spacetab-io/logs-go) [![codecov](https://codecov.io/gh/spacetab-io/logs-go/graph/badge.svg)](https://codecov.io/gh/spacetab-io/logs-go)
 
-Wrapper for [zerolog](https://github.com/rs/zerolog) tuned to work with [configuration](https://github.com/spacetab-io/configuration-go) and
+Wrapper for [uber zap](go.uber.org/zap) logger tuned to work with [configuration](https://github.com/spacetab-io/configuration-go) and
 sentry hook.
 
 ## Usage
 
-Initiate new logger filled with struct that implements `LogsConfigInterface` and use it as common zerolog
+Initiate new logger filled with struct that implements `LogsConfigInterface` and use it as common zap logger
 
 ```go
 package main
@@ -16,25 +16,24 @@ package main
 import (
 	"os"
 
-	cfgstructs "github.com/spacetab-io/configuration-structs-go"
+	cfgstructs "github.com/spacetab-io/configuration-structs-go/v2"
 	log "github.com/spacetab-io/logs-go/v3"
 )
 
 func main() {
-	conf := cfgstructs.Logs{
-		Level:  "warn",
-		Format: cfgstructs.LogFormatText,
-		Caller: &cfgstructs.CallerConfig{
-			Disabled:         false,
-			CallerSkipFrames: 2,
-		},
+	conf := &cfgstructs.Logs{
+		Level:   "debug",
+		Format:  "text",
+		Colored: true,
+		Caller:  cfgstructs.CallerConfig{Show: true, SkipFrames: 1},
 		Sentry: &cfgstructs.SentryConfig{
 			Enable: true,
-			DSN:    "http://dsn.sentry.com",
+			Debug:  true,
+			DSN:    os.Getenv("SENTRY_DSN"),
 		},
 	}
 
-	logger, err := log.Init("test", conf, "serviceName", "v3.1.2", os.Stdout)
+	logger, err := log.Init(conf, "test", "service", "v3.0.0", os.Stdout)
 	if err != nil {
 		panic(err)
 	}

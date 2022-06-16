@@ -8,8 +8,7 @@ import (
 	"io"
 
 	"github.com/getsentry/sentry-go"
-	cfgstructs "github.com/spacetab-io/configuration-structs-go"
-	"github.com/spacetab-io/configuration-structs-go/contracts"
+	"github.com/spacetab-io/configuration-structs-go/v2/contracts"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -18,11 +17,13 @@ var ErrEmptyOutput = errors.New("log output is not defined")
 
 func contextFields(ctx context.Context) (fields map[contracts.ContextKey]interface{}) {
 	fields = make(map[contracts.ContextKey]interface{})
-	if requestID, ok := ctx.Value(contracts.ContextKeyRequestID).(fmt.Stringer); ok && requestID.String() != "00000000-0000-0000-0000-000000000000" {
+	if requestID, ok := ctx.Value(contracts.ContextKeyRequestID).(fmt.Stringer); ok &&
+		requestID.String() != "00000000-0000-0000-0000-000000000000" {
 		fields[contracts.ContextKeyRequestID] = requestID.String()
 	}
 
-	if requestID, ok := ctx.Value(contracts.ContextKeyRequestID).(string); ok && requestID != "00000000-0000-0000-0000-000000000000" {
+	if requestID, ok := ctx.Value(contracts.ContextKeyRequestID).(string); ok &&
+		requestID != "00000000-0000-0000-0000-000000000000" {
 		fields[contracts.ContextKeyRequestID] = requestID
 	}
 
@@ -32,13 +33,13 @@ func contextFields(ctx context.Context) (fields map[contracts.ContextKey]interfa
 type Logger struct {
 	*zap.Logger
 	Level zapcore.Level
-	cfg   cfgstructs.LogsInterface
+	cfg   contracts.LogsCfgInterface
 }
 
-func Init(cfg cfgstructs.LogsInterface, stage string, serviceAlias string, serviceVersion string, w io.Writer) (Logger, error) {
+func Init(cfg contracts.LogsCfgInterface, stage string, serviceAlias string, serviceVersion string, w io.Writer) (Logger, error) {
 	logLevel, err := zapcore.ParseLevel(cfg.GetLevel())
 	if err != nil {
-		return Logger{}, err
+		return Logger{}, fmt.Errorf("error level parsing error: %w", err)
 	}
 
 	if w == nil {
@@ -64,6 +65,7 @@ func Init(cfg cfgstructs.LogsInterface, stage string, serviceAlias string, servi
 	logConfig.EncodeCaller = zapcore.FullCallerEncoder
 	logConfig.ConsoleSeparator = " | "
 	logConfig.EncodeLevel = zapcore.CapitalLevelEncoder
+
 	if cfg.IsColored() {
 		logConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
 	}
@@ -86,7 +88,7 @@ func Init(cfg cfgstructs.LogsInterface, stage string, serviceAlias string, servi
 		sentryClient, err := sentry.NewClient(sentry.ClientOptions{
 			Dsn:   cfg.GetSentryDSN(),
 			Debug: cfg.SentryDebugEnabled(),
-			//AttachStacktrace: true,
+			// AttachStacktrace: true,
 			ServerName:  serviceAlias,
 			Release:     serviceVersion,
 			Environment: stage,
@@ -97,11 +99,12 @@ func Init(cfg cfgstructs.LogsInterface, stage string, serviceAlias string, servi
 						filtered = append(filtered, integration)
 					}
 				}
+
 				return filtered
 			},
 		})
 		if err != nil {
-			return Logger{}, err
+			return Logger{}, fmt.Errorf("sentry client init error: %w", err)
 		}
 
 		buf := &bytes.Buffer{}
@@ -120,7 +123,9 @@ func Init(cfg cfgstructs.LogsInterface, stage string, serviceAlias string, servi
 
 	logger := zap.New(coresTee, zap.WithCaller(cfg.ShowCaller()), zap.AddCallerSkip(cfg.GetCallerSkipFrames()))
 
-	defer logger.Sync()
+	defer func() {
+		_ = logger.Sync()
+	}()
 
 	zl := Logger{Logger: logger, Level: logLevel, cfg: cfg}
 
@@ -131,7 +136,6 @@ type Event struct {
 	*Logger
 	callerSkip int
 	lvl        zapcore.Level
-	msg        string
 	fields     []zapcore.Field
 }
 
@@ -157,15 +161,47 @@ func (e *Event) Str(key, value string) *Event {
 	return e
 }
 
+func (e *Event) Strs(key string, values []string) *Event {
+	e.fields = append(e.fields, zap.Strings(key, values))
+
+	return e
+}
+
+func (e *Event) Interfaces(key string, vals ...interface{}) *Event {
+	for _, val := range vals {
+		e.fields = append(e.fields, zap.Reflect(key, val))
+	}
+
+	return e
+}
+
 func (e *Event) Err(err error) *Event {
 	e.fields = append(e.fields, zap.Error(err))
 
 	return e
 }
 
-func (e Event) Msgf(format string, params ...interface{}) {
-	e.Logger.WithOptions(zap.AddCallerSkip(1))
-	e.Msg(fmt.Sprintf(format, params...))
+func (e *Event) Msgf(format string, params ...interface{}) {
+	msg := fmt.Sprintf(format, params...)
+
+	l := e.Logger.Logger
+
+	switch e.lvl {
+	case zapcore.DebugLevel:
+		l.Debug(msg, e.fields...)
+	case zapcore.InfoLevel:
+		l.Info(msg, e.fields...)
+	case zapcore.WarnLevel:
+		l.Warn(msg, e.fields...)
+	case zapcore.ErrorLevel:
+		l.Error(msg, e.fields...)
+	case zapcore.DPanicLevel:
+		l.DPanic(msg, e.fields...)
+	case zapcore.PanicLevel:
+		l.Panic(msg, e.fields...)
+	case zapcore.FatalLevel:
+		l.Fatal(msg, e.fields...)
+	}
 }
 
 func (e Event) Msg(msg string) {

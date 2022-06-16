@@ -15,7 +15,7 @@ func NewNSQLogger(logger Logger) NSQLogger {
 }
 
 func (nl NSQLogger) Output(calldepth int, s string) error {
-	output := strings.SplitN(s, " ", 2)
+	output := strings.SplitN(s, " ", 2) // nolint: gomnd
 
 	if len(output) <= 1 {
 		nl.defaultOutput(s)
@@ -39,6 +39,8 @@ func (nl NSQLogger) defaultOutput(s string) {
 	nl.logger.Info().Msg(s)
 }
 
+const unknownErrLevel = -2
+
 func parseNSQLogLvl(s string) zapcore.Level {
 	var lvl zapcore.Level
 
@@ -56,17 +58,17 @@ func parseNSQLogLvl(s string) zapcore.Level {
 	case "PNC":
 		lvl = zapcore.PanicLevel
 	default:
-		lvl = -2
+		lvl = unknownErrLevel
 	}
 
 	return lvl
 }
 
 func (nl NSQLogger) LogLevel() int {
-	return nsqLogLvlFromZerologLogLvl(nl.logger.Level)
+	return nsqLogLvlFromZapLogLvl(nl.logger.Level)
 }
 
-func nsqLogLvlFromZerologLogLvl(level zapcore.Level) int {
+func nsqLogLvlFromZapLogLvl(level zapcore.Level) int {
 	var nsqlLL int
 
 	switch level {
@@ -76,9 +78,7 @@ func nsqLogLvlFromZerologLogLvl(level zapcore.Level) int {
 		nsqlLL = 1
 	case zapcore.WarnLevel:
 		nsqlLL = 2
-	case zapcore.ErrorLevel:
-	case zapcore.FatalLevel:
-	case zapcore.PanicLevel:
+	case zapcore.ErrorLevel, zapcore.FatalLevel, zapcore.PanicLevel, zapcore.DPanicLevel:
 		nsqlLL = 3
 	case -2:
 		nsqlLL = 4

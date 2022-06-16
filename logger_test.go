@@ -7,12 +7,14 @@ import (
 	"os"
 	"testing"
 
-	cfgstructs "github.com/spacetab-io/configuration-structs-go"
+	cfgstructs "github.com/spacetab-io/configuration-structs-go/v2"
+	"github.com/spacetab-io/configuration-structs-go/v2/contracts"
 	log "github.com/spacetab-io/logs-go/v3"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestInitNew(t *testing.T) {
+	t.Parallel()
 
 	l, err := log.Init(&cfgstructs.Logs{
 		Level:   "debug",
@@ -22,26 +24,24 @@ func TestInitNew(t *testing.T) {
 		Sentry: &cfgstructs.SentryConfig{
 			Enable: true,
 			Debug:  true,
-			DSN:    "https://60acad048aee4777a7331d8282fe8022@sentry.spacetab.io/2",
+			DSN:    os.Getenv("SENTRY_DSN"),
 		},
 	}, "test", "service", "v1.0.0", os.Stdout)
 	if !assert.NoError(t, err, "logger init") {
 		t.FailNow()
 	}
 
-	l.Info().Str("some", "string").Str("and", "more").Msg("hello!")
-	l.Warn().Str("another", "string").Str("with", "more").Msg("world!")
-	l.Error().Err(log.ErrEmptyOutput).Str("another", "string").Str("with", "more").Msg("catch it!")
+	l.Debug().Str("some", "string").Str("and", "more").Msgf("%s!", "hello")
+	l.Info().Strs("array", []string{"string", "and", "more"}).Msg("another!")
+	l.Warn().Interfaces("another", "string", 1, 1.2, struct{ Boo string }{Boo: "boo"}).Str("with", "more").Msgf("%s", "world!")
+	l.Error().Err(log.ErrEmptyOutput).Str("another", "string").Str("with", "more").Msgf("%s %s", "catch", "it!")
 	l.Error().Err(log.ErrEmptyOutput).Send()
-
-	//assert.Contains(t, out.String(), "string")
-	//assert.Contains(t, out.String(), "more")
 }
 
 func TestInit(t *testing.T) {
 	type inStruct struct {
 		stage          string
-		cfg            cfgstructs.LogsInterface
+		cfg            contracts.LogsCfgInterface
 		serviceAlias   string
 		serviceVersion string
 		w              bool
@@ -191,8 +191,6 @@ func TestInit(t *testing.T) {
 
 				l.DPanic().Msg(tc.in.msg)
 				assert.Contains(t, w.(*bytes.Buffer).String(), "DPANIC")
-
-				//assert.Contains(t, w.(*bytes.Buffer).String(), "PANIC")
 			}
 		})
 	}
