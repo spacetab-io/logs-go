@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/spacetab-io/configuration-structs-go/v2/contracts"
@@ -155,14 +156,48 @@ func (l Logger) Printf(format string, v ...interface{}) {
 	l.Info().Msgf(format, v...)
 }
 
+func (l Logger) LogEvent() *Event {
+	return &Event{Logger: &l, callerSkip: l.cfg.GetCallerSkipFrames()}
+}
+
+func (e *Event) SetLogLevel(lvl zapcore.Level) *Event {
+	e.lvl = lvl
+
+	return e
+}
+
+func (e *Event) Dur(key string, value time.Duration) *Event {
+	e.fields = append(e.fields, zap.Duration(key, value))
+
+	return e
+}
+
+func (e *Event) Bytes(key string, value []byte) *Event {
+	e.fields = append(e.fields, zap.ByteString(key, value))
+
+	return e
+}
+
 func (e *Event) Str(key, value string) *Event {
 	e.fields = append(e.fields, zap.String(key, value))
 
 	return e
 }
 
+func (e *Event) Int(key string, value int) *Event {
+	e.fields = append(e.fields, zap.Int(key, value))
+
+	return e
+}
+
 func (e *Event) Strs(key string, values []string) *Event {
 	e.fields = append(e.fields, zap.Strings(key, values))
+
+	return e
+}
+
+func (e *Event) Interface(key string, val interface{}) *Event {
+	e.fields = append(e.fields, zap.Reflect(key, val))
 
 	return e
 }
