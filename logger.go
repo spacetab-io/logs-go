@@ -190,6 +190,72 @@ func (e *Event) Int(key string, value int) *Event {
 	return e
 }
 
+func (e *Event) Intp(key string, value *int) *Event {
+	e.fields = append(e.fields, zap.Intp(key, value))
+
+	return e
+}
+
+func (e *Event) Uint(key string, value uint) *Event {
+	e.fields = append(e.fields, zap.Uint(key, value))
+
+	return e
+}
+
+func (e *Event) Uintp(key string, value *uint) *Event {
+	e.fields = append(e.fields, zap.Uintp(key, value))
+
+	return e
+}
+
+func (e *Event) Int32(key string, value int32) *Event {
+	e.fields = append(e.fields, zap.Int32(key, value))
+
+	return e
+}
+
+func (e *Event) Int32p(key string, value *int32) *Event {
+	e.fields = append(e.fields, zap.Int32p(key, value))
+
+	return e
+}
+
+func (e *Event) Uint32(key string, value uint32) *Event {
+	e.fields = append(e.fields, zap.Uint32(key, value))
+
+	return e
+}
+
+func (e *Event) Uint32p(key string, value *uint32) *Event {
+	e.fields = append(e.fields, zap.Uint32p(key, value))
+
+	return e
+}
+
+func (e *Event) Int64(key string, value int64) *Event {
+	e.fields = append(e.fields, zap.Int64(key, value))
+
+	return e
+}
+
+func (e *Event) Int64p(key string, value *int64) *Event {
+	e.fields = append(e.fields, zap.Int64p(key, value))
+
+	return e
+}
+
+func (e *Event) Unt64(key string, value uint64) *Event {
+	e.fields = append(e.fields, zap.Uint64(key, value))
+
+	return e
+}
+
+func (e *Event) Uint64p(key string, value *uint64) *Event {
+	e.fields = append(e.fields, zap.Uint64p(key, value))
+
+	return e
+}
+
 func (e *Event) Strs(key string, values []string) *Event {
 	e.fields = append(e.fields, zap.Strings(key, values))
 
